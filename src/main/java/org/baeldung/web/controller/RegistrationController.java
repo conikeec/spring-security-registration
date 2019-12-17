@@ -128,6 +128,19 @@ public class RegistrationController {
         return new GenericResponse(messages.getMessage("message.resetPasswordEmail", null, request.getLocale()));
     }
 
+    // Reset password - VULNERABLE
+    @RequestMapping(value = "/user/resetPasswordBad", method = RequestMethod.POST)
+    @ResponseBody
+    public GenericResponse resetPasswordBad(final HttpServletRequest request, @RequestParam("email") final String userEmail) {
+        final User user = userService.findUserByEmail(userEmail.toLowerCase());
+        if (user != null) {
+            final String token = UUID.randomUUID().toString();
+            userService.createPasswordResetTokenForUser(user, token);
+            mailSender.send(constructResetTokenEmailBad(getAppUrl(request), request.getLocale(), token, user.getId(), userEmail));
+        }
+        return new GenericResponse(messages.getMessage("message.resetPasswordEmail", null, request.getLocale()));
+    }
+
     @RequestMapping(value = "/user/changePassword", method = RequestMethod.GET)
     public String showChangePasswordPage(final Locale locale, final Model model, @RequestParam("id") final long id, @RequestParam("token") final String token) {
         final String result = securityUserService.validatePasswordResetToken(id, token);
@@ -182,11 +195,26 @@ public class RegistrationController {
         return constructEmail("Reset Password", message + " \r\n" + url, user);
     }
 
+    private SimpleMailMessage constructResetTokenEmailBad(final String contextPath, final Locale locale, final String token, final long userId, final String userEmail) {
+        final String url = contextPath + "/user/changePassword?id=" + userId + "&token=" + token;
+        final String message = messages.getMessage("message.resetPassword", null, locale);
+        return constructEmailBad("Reset Password", message + " \r\n" + url, userEmail);
+    }
+
     private SimpleMailMessage constructEmail(String subject, String body, User user) {
         final SimpleMailMessage email = new SimpleMailMessage();
         email.setSubject(subject);
         email.setText(body);
         email.setTo(user.getEmail());
+        email.setFrom(env.getProperty("support.email"));
+        return email;
+    }
+
+    private SimpleMailMessage constructEmailBad(String subject, String body, String userEmail) {
+        final SimpleMailMessage email = new SimpleMailMessage();
+        email.setSubject(subject);
+        email.setText(body);
+        email.setTo(userEmail);
         email.setFrom(env.getProperty("support.email"));
         return email;
     }
